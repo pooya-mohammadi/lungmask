@@ -209,7 +209,7 @@ class LMInferer:
 
         return outmask.astype(np.uint8)
 
-    def apply(self, image: Union[sitk.Image, np.ndarray]) -> np.ndarray:
+    def apply(self, image: Union[sitk.Image, np.ndarray], filename: str = None) -> np.ndarray:
         """Apply model on image (volumetric)
 
         Args:
@@ -221,9 +221,9 @@ class LMInferer:
         if self.fillmodel is None:
             return self._inference(image, self.model)
         else:
-            logger.info(f"Apply: {self.modelname}")
+            logger.info(f"Apply: {self.modelname} to {filename}")
             res_l = self._inference(image, self.model)
-            logger.info(f"Apply: {self.fillmodel}")
+            logger.info(f"Apply: {self.fillmodel} to {filename}")
             res_r = self._inference(image, self.fillmodelm)
             spare_value = res_l.max() + 1
             res_l[np.logical_and(res_l == 0, res_r > 0)] = spare_value

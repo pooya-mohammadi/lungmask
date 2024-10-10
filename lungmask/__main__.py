@@ -1,8 +1,9 @@
+
 import argparse
 import os
 import sys
 from importlib import metadata
-from os.path import isdir, join
+from os.path import isdir, join, split
 
 import SimpleITK as sitk
 
@@ -59,6 +60,12 @@ def main():
         default=20,
     )
     parser.add_argument(
+        "--pool",
+        default=0,
+        type=int,
+        help="If set more than 0 creates a Pool of workers. Only works on folder/multi-file processing!"
+    )
+    parser.add_argument(
         "--noprogress",
         action="store_true",
         help="If set, no tqdm progress bar will be shown",
@@ -112,11 +119,26 @@ def main():
 
     if isdir(args.input):
         os.makedirs(args.output, exist_ok=True)
-        for filename in os.listdir(args.input):
-            filepath = join(args.input, filename)
-            if not isdir(filepath):
-                output_path = join(args.output, filename)
-                process_one_sample(filepath, output_path, args, inferer, keepmetadata)
+        if args.pool > 1:
+            from multiprocessing import Pool, set_start_method
+            set_start_method('spawn')
+            tasks = []
+            with Pool(processes=args.pool) as pool:
+                for filename in os.listdir(args.input):
+                    filepath = join(args.input, filename)
+                    if not isdir(filepath):
+                        output_path = join(args.output, filename)
+                        task = pool.apply_async(process_one_sample,
+                                                args=(filepath, output_path, args, inferer, keepmetadata))
+                        tasks.append(task)
+                for task in tasks:
+                    task.get()
+        else:
+            for filename in os.listdir(args.input):
+                filepath = join(args.input, filename)
+                if not isdir(filepath):
+                    output_path = join(args.output, filename)
+                    process_one_sample(filepath, output_path, args, inferer, keepmetadata)
     else:
         process_one_sample(args.input, args.output, args, inferer, keepmetadata)
 
@@ -125,7 +147,7 @@ def process_one_sample(input, output, args, inferer, keepmetadata):
     input_image = utils.load_input_image(
         input, disable_tqdm=args.noprogress, read_metadata=keepmetadata
     )
-    result = inferer.apply(input_image)
+    result = inferer.apply(input_image, filename=split(input)[-1])
     result_out = sitk.GetImageFromArray(result)
     result_out.CopyInformation(input_image)
     writer = sitk.ImageFileWriter()
