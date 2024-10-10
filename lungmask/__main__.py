@@ -81,6 +81,10 @@ def main():
         action="store_true",
         help="Do not keep study/patient related metadata of the input, if any. Only affects output file formats that can store such information (e.g. DICOM).",
     )
+    parser.add_argument("--overwrite",
+                        action="store_true",
+                        help="If set to True, will overwrite the existing files unless skips it"
+                        )
 
     argsin = sys.argv[1:]
     args = parser.parse_args(argsin)
@@ -128,6 +132,9 @@ def main():
                     filepath = join(args.input, filename)
                     if not isdir(filepath):
                         output_path = join(args.output, filename)
+                        print(f"[INFO] working on {output_path} which: {os.path.exists(output_path)}")
+                        if not args.overwrite and os.path.exists(output_path):
+                            continue
                         task = pool.apply_async(process_one_sample,
                                                 args=(filepath, output_path, args, inferer, keepmetadata))
                         tasks.append(task)
@@ -138,9 +145,14 @@ def main():
                 filepath = join(args.input, filename)
                 if not isdir(filepath):
                     output_path = join(args.output, filename)
+                    if not args.overwrite and os.path.exists(output_path):
+                        continue
                     process_one_sample(filepath, output_path, args, inferer, keepmetadata)
     else:
-        process_one_sample(args.input, args.output, args, inferer, keepmetadata)
+        if not args.overwrite and os.path.exists(args.output):
+            ...
+        else:
+            process_one_sample(args.input, args.output, args, inferer, keepmetadata)
 
 
 def process_one_sample(input, output, args, inferer, keepmetadata):
