@@ -2,8 +2,8 @@ import argparse
 import os
 import sys
 from importlib import metadata
+from os.path import isdir, join
 
-import numpy as np
 import SimpleITK as sitk
 
 from lungmask import LMInferer, utils
@@ -87,14 +87,10 @@ def main():
 
     logger.info("Load model")
 
-    input_image = utils.load_input_image(
-        args.input, disable_tqdm=args.noprogress, read_metadata=keepmetadata
-    )
-
     logger.info("Infer lungmask")
     if args.modelname == "LTRCLobes_R231":
         assert (
-            args.modelpath is None
+                args.modelpath is None
         ), "Modelpath can not be specified for LTRCLobes_R231 mode"
         inferer = LMInferer(
             modelname="LTRCLobes",
@@ -104,7 +100,6 @@ def main():
             volume_postprocessing=not (args.nopostprocess),
             tqdm_disable=args.noprogress,
         )
-        result = inferer.apply(input_image)
     else:
         inferer = LMInferer(
             modelname=args.modelname,
@@ -114,14 +109,27 @@ def main():
             volume_postprocessing=not (args.nopostprocess),
             tqdm_disable=args.noprogress,
         )
-        result = inferer.apply(input_image)
 
+    if isdir(args.input):
+        os.makedirs(args.output, exist_ok=True)
+        for filename in os.listdir(args.input):
+            filepath = join(args.input, filename)
+            if not isdir(filepath):
+                output_path = join(args.output, filename)
+                process_one_sample(filepath, output_path, args, inferer, keepmetadata)
+    else:
+        process_one_sample(args.input, args.output, args, inferer, keepmetadata)
+
+
+def process_one_sample(input, output, args, inferer, keepmetadata):
+    input_image = utils.load_input_image(
+        input, disable_tqdm=args.noprogress, read_metadata=keepmetadata
+    )
+    result = inferer.apply(input_image)
     result_out = sitk.GetImageFromArray(result)
     result_out.CopyInformation(input_image)
-
     writer = sitk.ImageFileWriter()
-    writer.SetFileName(args.output)
-
+    writer.SetFileName(output)
     if keepmetadata:
         # keep the Study Instance UID
         writer.SetKeepOriginalImageUID(True)
@@ -139,7 +147,6 @@ def main():
         # set WL/WW
         result_out.SetMetaData("0028|1050", "1")  # Window Center
         result_out.SetMetaData("0028|1051", "2")  # Window Width
-
     logger.info(f"Save result to: {args.output}")
     writer.Execute(result_out)
 
