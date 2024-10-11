@@ -156,33 +156,36 @@ def main():
 
 
 def process_one_sample(input, output, args, inferer, keepmetadata):
-    input_image = utils.load_input_image(
-        input, disable_tqdm=args.noprogress, read_metadata=keepmetadata
-    )
-    result = inferer.apply(input_image, filename=split(input)[-1])
-    result_out = sitk.GetImageFromArray(result)
-    result_out.CopyInformation(input_image)
-    writer = sitk.ImageFileWriter()
-    writer.SetFileName(output)
-    if keepmetadata:
-        # keep the Study Instance UID
-        writer.SetKeepOriginalImageUID(True)
+    try:
+        input_image = utils.load_input_image(
+            input, disable_tqdm=args.noprogress, read_metadata=keepmetadata
+        )
+        result = inferer.apply(input_image, filename=split(input)[-1])
+        result_out = sitk.GetImageFromArray(result)
+        result_out.CopyInformation(input_image)
+        writer = sitk.ImageFileWriter()
+        writer.SetFileName(output)
+        if keepmetadata:
+            # keep the Study Instance UID
+            writer.SetKeepOriginalImageUID(True)
 
-        DICOM_tags_to_keep = utils.get_DICOM_tags_to_keep()
+            DICOM_tags_to_keep = utils.get_DICOM_tags_to_keep()
 
-        # copy the DICOM tags we want to keep
-        for key in input_image.GetMetaDataKeys():
-            if key in DICOM_tags_to_keep:
-                result_out.SetMetaData(key, input_image.GetMetaData(key))
+            # copy the DICOM tags we want to keep
+            for key in input_image.GetMetaDataKeys():
+                if key in DICOM_tags_to_keep:
+                    result_out.SetMetaData(key, input_image.GetMetaData(key))
 
-        # set the Series Description tag
-        result_out.SetMetaData("0008|103e", "Created with lungmask")
+            # set the Series Description tag
+            result_out.SetMetaData("0008|103e", "Created with lungmask")
 
-        # set WL/WW
-        result_out.SetMetaData("0028|1050", "1")  # Window Center
-        result_out.SetMetaData("0028|1051", "2")  # Window Width
-    logger.info(f"Save result to: {args.output}")
-    writer.Execute(result_out)
+            # set WL/WW
+            result_out.SetMetaData("0028|1050", "1")  # Window Center
+            result_out.SetMetaData("0028|1051", "2")  # Window Width
+        logger.info(f"Save result to: {args.output}")
+        writer.Execute(result_out)
+    except Exception as e:
+        print(f"[ERROR] Error {e} happened during processing: {input}")
 
 
 if __name__ == "__main__":
